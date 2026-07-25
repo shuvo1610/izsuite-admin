@@ -1,0 +1,5 @@
+email,name,phone,cc,bcc,source,notes
+john.doe@example.com,John Doe,+1 555 000 0001,manager@example.com,,LinkedIn,Met at conference
+jane.smith@acme.com,Jane Smith,+44 20 7946 0200,hr@acme.com,cfo@acme.com,Website,Interested in enterprise plan
+contact@globalcorp.io,Global Corp,,info@globalcorp.io,,Referral,Referred by John
+noreply@widgets.co,Widgets Co,,,sales@widgets.co,Cold Outreach,

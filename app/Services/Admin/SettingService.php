@@ -1,0 +1,94 @@
+<?php
+
+namespace App\Services\Admin;
+
+use App\Models\Setting;
+use App\Repositories\SettingRepository;
+use Illuminate\Database\Eloquent\Collection;
+
+class SettingService
+{
+    private const DEFAULTS = [
+        'ai_active_provider'     => ['value' => 'openai', 'group' => 'ai'],
+        'ai_openai_enabled'      => ['value' => '1', 'group' => 'ai'],
+        'ai_openai_api_key'      => ['value' => '', 'group' => 'ai'],
+        'ai_openai_model'        => ['value' => 'gpt-4.1-mini', 'group' => 'ai'],
+        'ai_gemini_enabled'      => ['value' => '0', 'group' => 'ai'],
+        'ai_gemini_api_key'      => ['value' => '', 'group' => 'ai'],
+        'ai_gemini_model'        => ['value' => 'gemini-2.0-flash', 'group' => 'ai'],
+        'ai_temperature'         => ['value' => '0.7', 'group' => 'ai'],
+        'ai_max_tokens'          => ['value' => '1000', 'group' => 'ai'],
+
+        // Social Login
+        'google_login_enabled'   => ['value' => '0', 'group' => 'social'],
+        'google_client_id'       => ['value' => '', 'group' => 'social'],
+        'google_client_secret'   => ['value' => '', 'group' => 'social'],
+        'linkedin_login_enabled' => ['value' => '0', 'group' => 'social'],
+        'linkedin_client_id'     => ['value' => '', 'group' => 'social'],
+        'linkedin_client_secret' => ['value' => '', 'group' => 'social'],
+
+        // Branding
+        'site_logo'              => ['value' => '', 'group' => 'branding'],
+        'site_favicon'           => ['value' => '', 'group' => 'branding'],
+        'primary_color'          => ['value' => '#137fec', 'group' => 'branding'],
+        'footer_text'            => ['value' => '', 'group' => 'branding'],
+    ];
+
+    public function __construct(
+        protected SettingRepository $settingRepo,
+    ) {}
+
+    public function ensureDefaults(): void
+    {
+        foreach (self::DEFAULTS as $key => $config) {
+            $existing = $this->settingRepo->getSetting($key);
+            if ($existing === null) {
+                $this->settingRepo->set($key, $config['value'], $config['group']);
+            } elseif ($existing->group !== $config['group']) {
+                // Fix group if it's different on live
+                $existing->update(['group' => $config['group']]);
+                Setting::clearCache();
+            }
+        }
+    }
+
+    /**
+     * Get all settings grouped.
+     */
+    public function getGrouped(): array
+    {
+        return $this->settingRepo->getGrouped();
+    }
+
+    /**
+     * Get settings by group.
+     */
+    public function getByGroup(string $group): Collection
+    {
+        return $this->settingRepo->getByGroup($group);
+    }
+
+    /**
+     * Get a setting value.
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        return $this->settingRepo->get($key, $default);
+    }
+
+    /**
+     * Set a setting value.
+     */
+    public function set(string $key, mixed $value, string $group = 'general'): Setting
+    {
+        return $this->settingRepo->set($key, $value, $group);
+    }
+
+    /**
+     * Bulk update settings.
+     */
+    public function bulkUpdate(array $data): void
+    {
+        $this->settingRepo->bulkUpdate($data);
+    }
+}
