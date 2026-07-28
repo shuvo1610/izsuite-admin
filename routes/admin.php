@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\AppController;
+use App\Http\Controllers\Admin\AppCategoryController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\CurrencyController;
@@ -33,6 +35,9 @@ Route::middleware(['auth', 'admin', 'permission'])->prefix('admin')->name('admin
 
     Route::resource('roles', RoleController::class)->except(['show'])->parameters(['roles' => 'id']);
     Route::resource('pages', PageController::class)->except(['show'])->parameters(['pages' => 'id']);
+    Route::resource('apps', AppController::class)->except(['show'])->parameters(['apps' => 'id']);
+    Route::resource('app-categories', AppCategoryController::class)->except(['show'])->parameters(['app-categories' => 'id']);
+    Route::patch('/app-categories/{id}/toggle-status', [AppCategoryController::class, 'toggleActive'])->name('app-categories.toggle-status');
     Route::resource('departments', DepartmentController::class)->except(['show'])->parameters(['departments' => 'id']);
     Route::resource('faqs', FaqController::class)->except(['show'])->parameters(['faqs' => 'id']);
     Route::resource('contact-messages', ContactMessageController::class)->only(['index', 'show'])->parameters(['contact-messages' => 'id']);
