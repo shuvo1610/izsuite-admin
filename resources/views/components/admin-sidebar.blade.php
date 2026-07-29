@@ -29,6 +29,17 @@
 
         <div class="sidebar-section-title">{{ __('Management') }}</div>
 
+        <a href="{{ route('admin.app-categories.index') }}" class="sidebar-link {{ request()->routeIs('admin.app-categories.*') ? 'active' : '' }}">
+            <i data-lucide="tags" class="icon"></i>
+            <span>{{ __('App Categories') }}</span>
+        </a>
+
+        <a href="{{ route('admin.apps.index') }}" class="sidebar-link {{ request()->routeIs('admin.apps.*') ? 'active' : '' }}">
+            <i data-lucide="app-window" class="icon"></i>
+            <span>{{ __('Apps') }}</span>
+        </a>
+
+
         <a href="{{ route('admin.departments.index') }}" class="sidebar-link {{ request()->routeIs('admin.departments.*') ? 'active' : '' }}">
             <i data-lucide="layers" class="icon"></i>
             <span>{{ __('Departments') }}</span>
