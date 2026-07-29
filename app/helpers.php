@@ -56,18 +56,15 @@ if (! function_exists('format_price')) {
      */
     function format_price(float $amount, ?string $currencyCode = null): string
     {
-        // Per-request cache for currencies
-        static $currencyCache = [];
-
         // Resolve which currency to use: function param -> session override -> system default
-        $code                 = $currencyCode ?? session('admin_currency', setting('default_currency', 'USD'));
+        $code = $currencyCode ?? session('admin_currency', setting('default_currency', 'USD'));
 
-        // Load currency from cache or DB
-        if (! isset($currencyCache[$code])) {
-            $currencyCache[$code] = Currency::where('code', $code)->first();
-        }
-
-        $currency             = $currencyCache[$code];
+        // Read from Currency::getAllCached() rather than a per-call query.
+        // IMPORTANT: do NOT cache this in a static variable — Octane workers
+        // live across requests, so a static would leak and serve stale rates
+        // until restart. getAllCached() is Redis-backed and invalidated on
+        // every currency write (see Currency::booted()).
+        $currency = Currency::getAllCached()[$code] ?? null;
 
         // If currency not found, fallback to raw format
         if (! $currency) {
@@ -76,7 +73,7 @@ if (! function_exists('format_price')) {
 
         // If converting to a non-default currency, apply exchange rate
         // Base assumption: prices stored in the default currency (rate=1.0)
-        $converted            = $amount * (float) $currency->exchange_rate;
+        $converted = $amount * $currency['exchange_rate'];
 
         // Read global formatting settings
         $decimals             = (int) setting('decimals', 2);
@@ -89,8 +86,8 @@ if (! function_exists('format_price')) {
 
         // Apply symbol position
         return $symbolPosition === 'right'
-            ? $formatted.$currency->symbol
-            : $currency->symbol.$formatted;
+            ? $formatted.$currency['symbol']
+            : $currency['symbol'].$formatted;
     }
 }
 

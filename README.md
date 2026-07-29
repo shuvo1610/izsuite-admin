@@ -232,7 +232,7 @@ Production differences:
 - Builds Vite assets into the image.
 - Removes source bind mounts.
 - Persists `storage/` in a named Docker volume.
-- Runs FrankenPHP instead of `php artisan serve`.
+- Runs Laravel Octane (FrankenPHP) instead of `php artisan serve`. The framework stays booted across requests for higher throughput; dev still uses `artisan serve` for instant reloads. `OCTANE_SERVER=frankenphp` must be set (see `.env.example`).
 - Keeps `APP_DEBUG=false` through `PRODUCTION_APP_DEBUG=false`.
 
 Recommended production `.env` values:

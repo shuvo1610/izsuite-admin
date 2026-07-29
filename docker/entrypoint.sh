@@ -125,14 +125,21 @@ if [ "$APP_ENV" = "production" ]; then
 fi
 
 if [ "$APP_ENV" = "production" ]; then
-    echo "==> Starting FrankenPHP on :8000..."
-    # Classic mode — one PHP process per request, no persistent app state.
-    # To move to Octane later: require laravel/octane, then replace this line
-    # with `php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000`.
+    echo "==> Starting Octane (FrankenPHP) on :8000..."
+    # Octane keeps the framework booted across requests for far higher
+    # throughput than classic one-process-per-request mode. The trade-off is
+    # that worker state survives between requests, so anything request-scoped
+    # must be flushed per request — config/octane.php wires the standard flush
+    # listeners, and the app has no static/container state that leaks.
+    #
+    # --host=0.0.0.0 is mandatory: Docker's published-port forwarding only
+    # reaches the container if the process listens on all interfaces, not
+    # loopback. Octane generates its own Caddyfile in storage/, so the classic
+    # mode `--config /etc/caddy/Caddyfile` is gone.
     if [ "$(id -u)" = "0" ]; then
-        exec gosu www-data frankenphp run --config /etc/caddy/Caddyfile
+        exec gosu www-data php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000
     fi
-    exec frankenphp run --config /etc/caddy/Caddyfile
+    exec php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000
 else
     echo "==> Starting artisan serve (local — instant reloads, no opcache)..."
     exec php artisan serve --host=0.0.0.0 --port=8000

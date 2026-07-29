@@ -18,6 +18,12 @@ x-app-env: &app-env
   APP_URL: "${APP_URL:-http://localhost:8000}"
   FRONTEND_URL: "${FRONTEND_URL:-https://izsuite.com}"
 
+  # Octane server. Defaults to frankenphp because that is the only Octane
+  # runtime installed in the image — the config's own default of roadrunner
+  # would crash-loop in production, where no .env exists inside the image to
+  # supply the value. See docker/entrypoint.sh for the start command.
+  OCTANE_SERVER: "${OCTANE_SERVER:-frankenphp}"
+
   # Service names, resolved on izsuite-internal. Never 127.0.0.1 — that is the
   # container itself, not the database.
   DB_CONNECTION: mysql
