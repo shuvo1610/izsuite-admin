@@ -1,0 +1,72 @@
+name: izSuite API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      artisan:
+        description: 'Artisan command to run after deploy (e.g. db:seed --force)'
+        required: false
+        default: ''
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server via SSH
+        # Pinned rather than @master: this action receives the deploy key.
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          # key, not password — password auth is disabled on this server.
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            set -e
+            cd /var/www/izsuite/api
+
+            git stash
+            git pull origin main
+
+            [ -f .env ] || cp .env.example .env
+
+            docker network inspect izsuite-public >/dev/null 2>&1 \
+              || docker network create izsuite-public
+
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+
+            $COMPOSE build app queue scheduler
+            $COMPOSE up -d mysql redis 2>/dev/null || true
+            $COMPOSE up -d --force-recreate --no-deps app
+
+            ATTEMPTS=0
+            until $COMPOSE exec -T app php artisan -V >/dev/null 2>&1; do
+              ATTEMPTS=$((ATTEMPTS + 1))
+              if [ "$ATTEMPTS" -ge 60 ]; then
+                echo "==> App container not ready after $((60 * 2))s."
+                $COMPOSE ps app || true
+                $COMPOSE logs --tail=200 app || true
+                exit 1
+              fi
+              echo "Waiting for app container... ($ATTEMPTS/60)"
+              sleep 2
+            done
+
+            if [ -n "${{ github.event.inputs.artisan }}" ]; then
+              echo "==> Running: php artisan ${{ github.event.inputs.artisan }}"
+              $COMPOSE exec -T app php artisan ${{ github.event.inputs.artisan }}
+            fi
+
+            echo "==> Ensuring queue/scheduler exist, then restarting for new code"
+            $COMPOSE up -d --no-deps queue scheduler
+            $COMPOSE restart queue scheduler
+
+            PORT=$(grep -E '^APP_PORT=' .env | cut -d= -f2 || echo 8000)
+            curl -fsS "http://127.0.0.1:${PORT:-8000}/up" >/dev/null \
+              && echo "==> API healthy" \
+              || { echo "==> /up did not respond"; $COMPOSE logs --tail=100 app; exit 1; }
+
+            docker image prune -f

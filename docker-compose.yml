@@ -1,0 +1,239 @@
+# ── Development ───────────────────────────────────────────────────────────────
+# Base compose file. Production layers docker-compose.prod.yml on top — see the
+# header of that file.
+#
+# Network layout mirrors the frontend project:
+#   izsuite-public    shared, external. app joins it as `api` so the Nuxt SSR
+#                     target can reach http://api:8000 without hairpinning back
+#                     out through host nginx.
+#   izsuite-internal  per-project, internal: true. MySQL and Redis live here
+#                     only, with no outbound route to the internet at all.
+
+name: izsuite-api
+
+x-app-env: &app-env
+  APP_ENV: "${APP_ENV:-local}"
+  APP_DEBUG: "${APP_DEBUG:-true}"
+  APP_KEY: "${APP_KEY:-}"
+  APP_URL: "${APP_URL:-http://localhost:8000}"
+  FRONTEND_URL: "${FRONTEND_URL:-https://izsuite.com}"
+
+  # Service names, resolved on izsuite-internal. Never 127.0.0.1 — that is the
+  # container itself, not the database.
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: "${DB_DATABASE:-izsuite}"
+  DB_USERNAME: "${DB_USERNAME:-izsuite}"
+  DB_PASSWORD: "${DB_PASSWORD:-secret}"
+
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_CLIENT: phpredis
+
+  # The repo's .env.example ships database drivers for all three. Every cached
+  # value, session read and queue poll becomes a MySQL round trip that way;
+  # Redis is already running here, so use it.
+  CACHE_STORE: "${CACHE_STORE:-redis}"
+  SESSION_DRIVER: "${SESSION_DRIVER:-redis}"
+  QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"
+
+  # Leading dot shares the cookie across izsuite.com and admin.izsuite.com,
+  # which is what Sanctum's SPA auth needs once the frontend logs users in.
+  SESSION_DOMAIN: "${SESSION_DOMAIN:-}"
+  SANCTUM_STATEFUL_DOMAINS: "${SANCTUM_STATEFUL_DOMAINS:-}"
+
+  MAIL_MAILER: "${MAIL_MAILER:-log}"
+  MAIL_HOST: "${MAIL_HOST:-}"
+  MAIL_PORT: "${MAIL_PORT:-587}"
+  MAIL_USERNAME: "${MAIL_USERNAME:-}"
+  MAIL_PASSWORD: "${MAIL_PASSWORD:-}"
+  MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:-hello@izsuite.com}"
+  MAIL_FROM_NAME: "${MAIL_FROM_NAME:-izSuite}"
+
+  BROADCAST_CONNECTION: "${BROADCAST_CONNECTION:-log}"
+  PUSHER_APP_ID: "${PUSHER_APP_ID:-}"
+  PUSHER_APP_KEY: "${PUSHER_APP_KEY:-}"
+  PUSHER_APP_SECRET: "${PUSHER_APP_SECRET:-}"
+  PUSHER_APP_CLUSTER: "${PUSHER_APP_CLUSTER:-ap1}"
+
+  FILESYSTEM_DISK: "${FILESYSTEM_DISK:-local}"
+  LOG_CHANNEL: "${LOG_CHANNEL:-stack}"
+  LOG_LEVEL: "${LOG_LEVEL:-debug}"
+
+services:
+
+  # ── Laravel (FrankenPHP, classic mode) ─────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: izsuite-api-app:dev
+    container_name: izsuite-api
+    restart: unless-stopped
+    ports:
+      # Loopback only. Docker writes iptables rules ahead of ufw, so a bare
+      # "8000:8000" would be reachable from the internet whatever the firewall
+      # says. Host nginx proxies to this.
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - /app/vendor
+      - /app/node_modules
+    environment:
+      <<: *app-env
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The FrankenPHP base image's own healthcheck pings Caddy's admin port
+      # 2019, which the dev target (artisan serve) never opens — it would flag
+      # the container unhealthy forever. Probe Laravel's /up route instead.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/up >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    networks:
+      izsuite-public:
+        aliases:
+          - api
+      izsuite-internal:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.4
+    container_name: izsuite-mysql
+    restart: unless-stopped
+    expose:
+      - "3306"
+    # Deliberately NOT published to the host. Reach it from another container
+    # by service name, or from the host with:
+    #   docker compose exec mysql mysql -u root -p
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:-root_secret}"
+      MYSQL_DATABASE: "${DB_DATABASE:-izsuite}"
+      MYSQL_USER: "${DB_USERNAME:-izsuite}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:-secret}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - izsuite-internal
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: izsuite-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    # appendonly so queued jobs and sessions survive a restart. Without it a
+    # container recycle silently drops everything still in the queue.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - izsuite-internal
+
+  # ── Queue worker ───────────────────────────────────────────────────────────
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: izsuite-api-app:dev
+    container_name: izsuite-queue
+    restart: unless-stopped
+    # Replaces the image entrypoint, so this skips migrations and cache warming
+    # — the app container owns those. Two containers racing on `migrate` is how
+    # you get duplicate-key errors on deploy.
+    entrypoint: ["php", "artisan", "queue:work", "--tries=3", "--timeout=120", "--sleep=1", "--max-time=3600"]
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/app
+      - /app/vendor
+      - /app/node_modules
+    environment:
+      <<: *app-env
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - izsuite-public      # outbound: mail relay, Pusher, external APIs
+      - izsuite-internal    # MySQL + Redis
+
+  # ── Scheduler ──────────────────────────────────────────────────────────────
+  # Replaces a host crontab entry. `schedule:work` runs in the foreground and
+  # ticks every minute, so the schedule in routes/console.php starts working
+  # the moment this container does — nothing to install on the host.
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: izsuite-api-app:dev
+    container_name: izsuite-scheduler
+    restart: unless-stopped
+    entrypoint: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/app
+      - /app/vendor
+      - /app/node_modules
+    environment:
+      <<: *app-env
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - izsuite-public
+      - izsuite-internal
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+
+  # Created once on the server and shared with the frontend project, so neither
+  # compose file owns it:
+  #   docker network create izsuite-public
+  izsuite-public:
+    name: izsuite-public
+    external: true
+
+  # No outbound route whatsoever. A compromised dependency inside MySQL or
+  # Redis cannot call home from here.
+  izsuite-internal:
+    driver: bridge
+    internal: true

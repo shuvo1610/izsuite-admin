@@ -1,290 +1,338 @@
-# Resumist
+# izSuite Admin & API
 
-A SaaS platform built with **Laravel 12**, **Tailwind CSS 4**, and **Vite**. Resumist provides resume-building tools with subscription plans, credit packs, an admin panel, and a RESTful API for the frontend client.
+Laravel 12 backend for izSuite. This project contains the admin panel and the
+REST API consumed by the Nuxt frontend.
 
----
+The project runs in Docker. You do not need to install PHP, Composer, MySQL,
+Redis, or Node on the server or your local machine.
 
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Manual Setup](#manual-setup)
-- [Running the App](#running-the-app)
-- [Default Accounts](#default-accounts)
-- [Project Structure](#project-structure)
-- [Running Tests](#running-tests)
-- [Environment Variables](#environment-variables)
-- [Useful Commands](#useful-commands)
-- [License](#license)
-
----
+| Component | Version |
+|---|---|
+| Runtime | FrankenPHP 1.x / PHP 8.4 |
+| Framework | Laravel 12 |
+| Database | MySQL 8.4 |
+| Cache / sessions / queue | Redis 7 |
+| Assets | Vite 7 + Tailwind 4 |
 
 ## Prerequisites
 
-Make sure the following are installed on your machine:
+Install Docker Desktop or Docker Engine with Compose v2.
 
-| Tool | Version | Check |
-|------|---------|-------|
-| PHP | ≥ 8.2 | `php -v` |
-| Composer | latest | `composer -V` |
-| Node.js | ≥ 18 | `node -v` |
-| npm | ≥ 9 | `npm -v` |
-| MySQL | ≥ 8.0 | `mysql --version` |
+Check Compose:
 
-> **Note:** The project uses MySQL by default. You can swap to PostgreSQL or SQLite by updating the `DB_*` variables in your `.env` file.
-
----
+```bash
+docker compose version
+```
 
 ## Quick Start
 
-If you just want to get up and running fast, run the built-in setup script:
+Clone the backend:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/tah33/resumist.git
-cd resumist
-
-# 2. Run the all-in-one setup (installs deps, generates key, runs migrations, builds assets)
-composer setup
-
-# 3. Seed the database with demo data
-php artisan db:seed
-
-# 4. Create a storage symlink
-php artisan storage:link
-
-# 5. Start the development server
-composer run dev
+git clone git@github.com:shuvo1610/izsuite-admin.git
+cd izsuite-admin
 ```
 
-The app will be available at **http://localhost:8000**.
-
----
-
-## Manual Setup
-
-If you prefer to go step-by-step:
-
-### 1. Clone the repository
+Create the shared Docker network. This network is also used by the frontend
+project, so create it once before starting either stack:
 
 ```bash
-git clone https://github.com/tah33/resumist.git
-cd resumist
+docker network create izsuite-public
 ```
 
-### 2. Install PHP dependencies
-
-```bash
-composer install
-```
-
-### 3. Install Node dependencies
-
-```bash
-npm install
-```
-
-### 4. Configure the environment
+Create the environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and update the database credentials:
+Generate an app key:
 
 ```bash
-# Update .env with your credentials
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=resumist
-DB_USERNAME=root
-DB_PASSWORD=your_password
+docker compose run --rm --no-deps --entrypoint php app -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
 ```
 
-### 5. Generate the application key
+Paste the generated `base64:...` value into `APP_KEY=` in `.env`.
+
+Start the backend:
 
 ```bash
-php artisan key:generate
+docker compose up -d
 ```
 
-### 6. Create the database
-
-Create a MySQL database matching the `DB_DATABASE` value in your `.env`:
+Watch startup logs:
 
 ```bash
-# Create the database manually if not using the setup script
-mysql -u root -p -e "CREATE DATABASE resumist;"
+docker compose logs -f app
 ```
 
-### 7. Run migrations
+The API/admin backend will be available at:
+
+```text
+http://127.0.0.1:${APP_PORT}
+```
+
+By default, `APP_PORT=8000` in `.env.example`.
+
+Health check:
 
 ```bash
-php artisan migrate
+curl http://127.0.0.1:8000/up
 ```
 
-### 8. Seed the database
+## Frontend Network
+
+The frontend project should join the same external network:
+
+```text
+izsuite-public
+```
+
+The backend app joins that network with the alias:
+
+```text
+api
+```
+
+So server-side frontend code can reach the backend at:
+
+```text
+http://api:8000
+```
+
+Browser-facing frontend code should use a public URL or same-origin proxy, not
+`http://api:8000`, because that hostname only exists inside Docker.
+
+## Services
+
+| Container | Role | Host exposure |
+|---|---|---|
+| `izsuite-api` | Laravel app | `127.0.0.1:${APP_PORT}->8000` |
+| `izsuite-mysql` | MySQL database | internal only |
+| `izsuite-redis` | Redis cache/session/queue | internal only |
+| `izsuite-queue` | Laravel queue worker | none |
+| `izsuite-scheduler` | Laravel scheduler | none |
+
+MySQL and Redis are not published to the host. They are reachable only by
+containers on the internal Docker network.
+
+## Environment
+
+Important `.env` values:
+
+| Variable | Example | Notes |
+|---|---|---|
+| `APP_KEY` | `base64:...` | Required before the app can start |
+| `APP_PORT` | `8000` | Host port bound to `127.0.0.1` |
+| `APP_URL` | `https://admin.example.com` | Public backend/admin URL |
+| `FRONTEND_URL` | `https://example.com` | Public frontend URL |
+| `DB_DATABASE` | `izsuite` | MySQL database name |
+| `DB_USERNAME` | `izsuite` | MySQL app user |
+| `DB_PASSWORD` | strong password | MySQL app user password |
+| `DB_ROOT_PASSWORD` | strong password | MySQL root password |
+| `CACHE_STORE` | `redis` | Redis is used by default |
+| `SESSION_DRIVER` | `redis` | Redis-backed sessions |
+| `QUEUE_CONNECTION` | `redis` | Redis-backed queues |
+| `SESSION_DOMAIN` | `.example.com` | Use for shared auth across subdomains |
+| `SANCTUM_STATEFUL_DOMAINS` | `example.com,admin.example.com` | Required for Sanctum SPA cookies |
+
+Database credentials are used only when MySQL initializes an empty data volume.
+If MySQL has already started once, changing `DB_PASSWORD` in `.env` will not
+change the existing database user's password. For a fresh local reset:
 
 ```bash
-php artisan db:seed
+docker compose down -v
+docker compose up -d
 ```
 
-This seeds: roles, plans, settings, languages, currencies, payment methods, demo users, staff accounts, pages, tickets, and activity logs.
+This deletes local database data.
 
-### 9. Create a storage symlink
+## Common Commands
+
+Show containers:
 
 ```bash
-php artisan storage:link
+docker compose ps
 ```
 
-### 10. Build frontend assets
+Run migrations:
 
 ```bash
-npm run build
+docker compose exec app php artisan migrate
 ```
 
----
-
-## Running the App
-
-### Development (recommended)
-
-Start the Laravel server, queue worker, and Vite dev server all at once:
+Seed local demo data:
 
 ```bash
-composer run dev
+docker compose exec app php artisan db:seed
 ```
 
-This runs concurrently:
-- **Laravel server** → `http://localhost:8000`
-- **Queue worker** → listens for background jobs
-- **Vite dev server** → handles CSS/JS hot-reloading
-
-### Production build
+Open a shell in the app container:
 
 ```bash
-npm run build
-php artisan serve
+docker compose exec app bash
 ```
 
----
-
-## Default Accounts
-
-After running `db:seed`, the following demo accounts are available:
-
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | `admin@resumist.test` | `password` |
-| Staff | `staff@resumist.test` | `password` |
-| Editor | `editor@resumist.test` | `password` |
-| Recruiter | `recruiter@resumist.test` | `password` |
-| Candidate | `candidate@resumist.test` | `password` |
-
-> **⚠️ Important:** Change these credentials before deploying to production.
-
----
-
-## Project Structure
-
-```
-resumist/
-├── app/
-│   ├── Http/            # Controllers, Middleware, Requests
-│   ├── Models/           # Eloquent models (User, Plan, Ticket, etc.)
-│   ├── Providers/        # Service providers
-│   ├── QueryFilters/     # Reusable query filter classes
-│   ├── Repositories/     # Data-access repositories
-│   ├── Services/         # Business logic services
-│   └── helpers.php       # Global helper functions
-├── config/               # Application configuration files
-├── database/
-│   ├── factories/        # Model factories for testing
-│   ├── migrations/       # Database schema migrations
-│   └── seeders/          # Database seed classes
-├── lang/                 # Localization files
-├── public/               # Public assets (entry point)
-├── resources/
-│   ├── css/              # Stylesheets (Tailwind CSS)
-│   ├── js/               # JavaScript source files
-│   └── views/            # Blade templates
-├── routes/
-│   ├── web.php           # Web routes (admin panel)
-│   ├── admin.php         # Admin-specific routes
-│   ├── api.php           # REST API routes (v1)
-│   └── auth.php          # Authentication routes
-├── storage/              # Logs, cache, uploaded files
-├── tests/                # Unit & feature tests
-├── .env.example          # Environment template
-├── composer.json         # PHP dependencies
-├── package.json          # Node dependencies
-└── vite.config.js        # Vite + Tailwind configuration
-```
-
----
-
-## Running Tests
-
-Tests use an in-memory SQLite database (configured in `phpunit.xml`):
+Open Tinker:
 
 ```bash
-# Run the full test suite
-php artisan test
-
-# Or via Pest directly
-./vendor/bin/pest
-
-# Run with coverage
-./vendor/bin/pest --coverage
+docker compose exec app php artisan tinker
 ```
 
----
-
-## Environment Variables
-
-Key variables you may want to configure in `.env`:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_NAME` | Application name | `Laravel` |
-| `APP_URL` | Base URL for the backend | `http://localhost` |
-| `FRONTEND_URL` | URL of the frontend client | `https://www.resumist.io/` |
-| `DB_CONNECTION` | Database driver | `mysql` |
-| `DB_DATABASE` | Database name | `example_app` |
-| `QUEUE_CONNECTION` | Queue driver | `database` |
-| `MAIL_MAILER` | Mail driver | `log` |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | *(empty)* |
-| `LINKEDIN_CLIENT_ID` | LinkedIn OAuth client ID | *(empty)* |
-| `AWS_ACCESS_KEY_ID` | AWS key for S3 storage | *(empty)* |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret for S3 storage | *(empty)* |
-| `AWS_BUCKET` | S3 bucket name | *(empty)* |
-
----
-
-## Useful Commands
+Run tests:
 
 ```bash
-# Clear all caches
-php artisan optimize:clear
-
-# Re-run all migrations (⚠️ destroys data)
-php artisan migrate:fresh --seed
-
-# Create a storage symlink
-php artisan storage:link
-
-# List all routes
-php artisan route:list
-
-# Run the queue worker
-php artisan queue:listen
-
-# Format code with Laravel Pint
-./vendor/bin/pint
+docker compose exec app php artisan test
 ```
 
----
+View logs:
 
-## License
+```bash
+docker compose logs -f app
+docker compose logs -f queue
+docker compose logs -f scheduler
+```
 
-This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Restart workers after code changes:
+
+```bash
+docker compose restart queue scheduler
+```
+
+Rebuild after changing Dockerfile, Composer dependencies, or Node dependencies:
+
+```bash
+docker compose up -d --build
+```
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Stop containers and delete local database/cache volumes:
+
+```bash
+docker compose down -v
+```
+
+## Production
+
+Production uses `docker-compose.prod.yml` on top of the base compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Production differences:
+
+- Builds the `production` Docker target.
+- Installs Composer dependencies without `require-dev`.
+- Builds Vite assets into the image.
+- Removes source bind mounts.
+- Persists `storage/` in a named Docker volume.
+- Runs FrankenPHP instead of `php artisan serve`.
+- Keeps `APP_DEBUG=false` through `PRODUCTION_APP_DEBUG=false`.
+
+Recommended production `.env` values:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+PRODUCTION_APP_DEBUG=false
+APP_URL=https://admin.example.com
+FRONTEND_URL=https://example.com
+
+DB_DATABASE=izsuite
+DB_USERNAME=izsuite
+DB_PASSWORD=change-this
+DB_ROOT_PASSWORD=change-this-too
+
+SESSION_DOMAIN=.example.com
+SANCTUM_STATEFUL_DOMAINS=example.com,admin.example.com
+```
+
+Set database passwords before the first production `up`. If MySQL already
+initialized its volume, changing `.env` later will not update those users.
+
+## Deployment
+
+The GitHub Actions deploy workflow is in:
+
+```text
+.github/workflows/deploy.yml
+```
+
+Required repository secrets:
+
+```text
+HOST
+USERNAME
+PORT
+SSH_KEY
+```
+
+The workflow:
+
+- Pulls the latest code on the server.
+- Ensures `izsuite-public` exists.
+- Builds the production app, queue, and scheduler images.
+- Starts MySQL and Redis.
+- Recreates the app container.
+- Restarts queue and scheduler so they use the new release.
+- Checks the `/up` endpoint.
+
+## Troubleshooting
+
+`network izsuite-public declared as external, but could not be found`
+
+Create the shared network:
+
+```bash
+docker network create izsuite-public
+```
+
+`APP_KEY is not set`
+
+Generate an app key and put it in `.env`:
+
+```bash
+docker compose run --rm --no-deps --entrypoint php app -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+```
+
+`port is already allocated`
+
+Change `APP_PORT` in `.env`, then restart:
+
+```bash
+docker compose up -d
+```
+
+`Class "...ServiceProvider" not found` or `vite: not found`
+
+Old anonymous `vendor` or `node_modules` volumes may be stale. For local
+development, reset them:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+`getaddrinfo for mysql failed`
+
+Start the database container first, or run commands against the already-running
+app container:
+
+```bash
+docker compose up -d mysql redis
+docker compose exec app php artisan migrate
+```
+
+Container is unhealthy
+
+Check app logs:
+
+```bash
+docker compose logs --tail=200 app
+```

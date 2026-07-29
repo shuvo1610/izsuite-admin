@@ -1,0 +1,55 @@
+# ── Production override ───────────────────────────────────────────────────────
+# Layers on top of docker-compose.yml. Switches app to the production target
+# (Vite assets baked in, --no-dev vendor, FrankenPHP instead of artisan serve)
+# and drops the source bind-mount so the container runs immutable image content.
+#
+# Usage on the server:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Secrets stay in .env and are never committed.
+
+services:
+
+  app:
+    build:
+      target: production
+    image: izsuite-api-app:prod
+    environment:
+      APP_ENV: production
+      # Do not inherit APP_DEBUG from the local .env. .env.example uses
+      # APP_DEBUG=true for development, and Compose reads that same file during
+      # production deploys unless we use a separate variable here.
+      APP_DEBUG: "${PRODUCTION_APP_DEBUG:-false}"
+    volumes: !override
+      # storage/ persists uploads, logs and the session/cache spillover across
+      # deploys. bootstrap/cache is deliberately NOT a volume — it holds
+      # compiled config and routes that must reset with every image, and
+      # persisting it serves stale config after a schema or .env change.
+      - app-storage:/app/storage
+
+  # Workers run the production image too, otherwise they would still be on the
+  # development target with a bind-mount, executing whatever is on disk rather
+  # than what was built and tested.
+  queue:
+    build:
+      target: production
+    image: izsuite-api-app:prod
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "${PRODUCTION_APP_DEBUG:-false}"
+    volumes: !override
+      - app-storage:/app/storage
+
+  scheduler:
+    build:
+      target: production
+    image: izsuite-api-app:prod
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "${PRODUCTION_APP_DEBUG:-false}"
+    volumes: !override
+      - app-storage:/app/storage
+
+volumes:
+  app-storage:

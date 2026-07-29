@@ -1,0 +1,53 @@
+# Keep the build context small and stop host artefacts leaking into the image.
+# vendor/ and node_modules/ especially: both are reinstalled inside the
+# container for the correct platform, and copying the host's would bloat the
+# context and risk shipping Windows-built native extensions into Linux.
+
+.git
+.github
+.idea
+.vscode
+.zed
+.fleet
+.nova
+.zcode
+.claude
+.agents
+.backup_pre_copy
+
+vendor
+node_modules
+
+# Built by the Dockerfile's builder stage — never copy a host build in.
+public/build
+public/hot
+public/storage
+
+# Runtime state. storage/ is a named volume in production; anything copied in
+# would be shadowed by the mount anyway.
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/*.key
+storage/pail
+bootstrap/cache/*
+database/*.sqlite
+
+.env
+.env.*
+!.env.example
+
+.phpunit.result.cache
+.phpunit.cache
+auth.json
+*.log
+
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Large files with no runtime purpose.
+Resumist.postman_collection.json
+http.md
+README.md
