@@ -26,6 +26,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The app runs behind host nginx, which itself sits behind Cloudflare,
+        // so every request arrives from 127.0.0.1 over plain HTTP. Without
+        // this Laravel builds URLs from what it sees rather than from
+        // X-Forwarded-Proto: `https://api.izsuite.com/` redirects to
+        // `http://api.izsuite.com/login`, and password-reset links go out as
+        // http://. Cloudflare's Always Use HTTPS masks it by bouncing the
+        // request back, which just turns one redirect into three.
+        //
+        // `*` is safe here because nothing reaches the app except through our
+        // own nginx on loopback.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'admin'      => AdminMiddleware::class,
             'permission' => PermissionCheckMiddleware::class,
