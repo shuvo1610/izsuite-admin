@@ -16,7 +16,7 @@
     <form action="{{ route('admin.staff.update', $staffUser->id) }}" method="POST">
         @csrf
         @method('PUT')
-        <div class="card mb-6 max-w-[640px]">
+        <div class="card mb-6">
             @include('admin.staff._form')
         </div>
 

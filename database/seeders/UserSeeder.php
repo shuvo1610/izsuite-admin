@@ -14,7 +14,7 @@ class UserSeeder extends Seeder
         $candidateRoleId = Role::where('slug', 'candidate')->value('id');
 
         User::firstOrCreate(
-            ['email' => 'admin@resumist.io'],
+            ['email' => 'admin@izsuite.io'],
             [
                 'name'     => 'Admin',
                 'password' => '123456',
@@ -23,7 +23,7 @@ class UserSeeder extends Seeder
         );
 
         User::firstOrCreate(
-            ['email' => 'recruiter@resumist.io'],
+            ['email' => 'recruiter@izsuite.io'],
             [
                 'name'     => 'Recruiter Demo',
                 'password' => '123456',
@@ -32,7 +32,7 @@ class UserSeeder extends Seeder
         );
 
         User::firstOrCreate(
-            ['email' => 'candidate@resumist.io'],
+            ['email' => 'candidate@izsuite.io'],
             [
                 'name'     => 'Candidate Demo',
                 'password' => '123456',

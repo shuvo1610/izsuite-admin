@@ -16,7 +16,7 @@
     <form action="{{ route('admin.app-categories.update', $appCategory->id) }}" method="POST">
         @csrf
         @method('PUT')
-        <div class="card mb-6 max-w-[640px]">
+        <div class="card mb-6">
             @include('admin.app-categories._form')
         </div>
 

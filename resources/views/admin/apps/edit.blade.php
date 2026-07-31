@@ -16,7 +16,7 @@
     <form action="{{ route('admin.apps.update', $app->id) }}" method="POST" enctype="multipart/form-data">
         @csrf
         @method('PUT')
-        <div class="card mb-6 max-w-[640px]">
+        <div class="card mb-6">
             @include('admin.apps._form')
         </div>
 

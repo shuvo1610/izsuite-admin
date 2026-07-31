@@ -11,9 +11,9 @@
     {{-- Filters --}}
     <div class="card mb-3">
         <form action="{{ route('admin.departments.index') }}" method="GET" class="flex flex-wrap items-end gap-4">
-            <div class="form-group mb-0">
+            <div class="mb-0">
                 <label for="recruiter_id" class="form-label text-sm">{{ __('Filter by Recruiter') }}</label>
-                <select name="recruiter_id" id="recruiter_id" class="form-control" onchange="this.form.submit()">
+                <select name="recruiter_id" id="recruiter_id" class="form-input" onchange="this.form.submit()">
                     <option value="">{{ __('All Recruiters') }}</option>
                     @foreach($recruiters as $recruiter)
                         <option value="{{ $recruiter->id }}" {{ request('recruiter_id') == $recruiter->id ? 'selected' : '' }}>

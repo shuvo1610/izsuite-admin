@@ -9,7 +9,7 @@
 
 
 {{-- Role Name --}}
-<div class="card mb-6 max-w-[640px]">
+<div class="card mb-6">
     <div class="mb-4">
         <label class="form-label" for="name">{{ __('Role Name') }}</label>
         <input type="text" id="name" name="name" value="{{ old('name', $isEdit ? $role->name : '') }}" class="form-input" placeholder="{{ __('e.g. Editor, Support Agent') }}" required>

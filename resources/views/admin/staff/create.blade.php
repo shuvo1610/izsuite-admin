@@ -15,7 +15,7 @@
 
     <form action="{{ route('admin.staff.store') }}" method="POST">
         @csrf
-        <div class="card mb-6 max-w-[640px]">
+        <div class="card mb-6">
             @include('admin.staff._form')
         </div>
 

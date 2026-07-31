@@ -15,7 +15,7 @@
 
     <form action="{{ route('admin.apps.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
-        <div class="card mb-6 max-w-[640px]">
+        <div class="card mb-6">
             @include('admin.apps._form')
         </div>
 
