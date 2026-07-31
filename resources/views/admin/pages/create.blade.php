@@ -44,6 +44,10 @@
                     slugInput.val($(this).val().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
                 }
             });
+
+            $('#page-form').on('submit', function () {
+                $('#summernote-content').summernote('commit');
+            });
         });
     </script>
 @endpush

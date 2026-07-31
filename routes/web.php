@@ -1,8 +1,16 @@
 <?php
 
+use App\Http\Controllers\PageController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/welcome', fn () => view('welcome'));
+
+/*
+|--------------------------------------------------------------------------
+| Public dynamic pages (Terms, Privacy, etc.)
+|--------------------------------------------------------------------------
+*/
+Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
 Route::get('/', function () {
     if (auth()->check() && auth()->user()->isAdmin()) {
         return redirect()->route('admin.overview');

@@ -50,7 +50,7 @@
                             <td class="text-sm text-[var(--text-muted)]">{{ $page->updated_at->diffForHumans() }}</td>
                             <td class="text-end">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="/page/{{ $page->slug }}" target="_blank" class="btn btn-xs btn-secondary" title="{{ __('Preview') }}">
+                                    <a href="{{ route('page.show', $page->slug) }}" target="_blank" class="btn btn-xs btn-secondary" title="{{ __('Preview') }}">
                                         <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                                     </a>
                                     <a href="{{ route('admin.pages.edit', $page->id) }}" class="btn btn-xs btn-secondary" title="{{ __('Edit') }}">

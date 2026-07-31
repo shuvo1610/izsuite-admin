@@ -37,6 +37,10 @@
                     ['misc', ['fullscreen', 'codeview', 'undo', 'redo']],
                 ],
             });
+
+            $('#page-form').on('submit', function () {
+                $('#summernote-content').summernote('commit');
+            });
         });
     </script>
 @endpush
